@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String   @unique
+  password    String?
+  roles       Role[] 
+  avatar     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  externalId       String?
+  provider         String?
+  
+  isActive         Boolean        @default(false)
+  manufacturer   Manufacturer?
+  seller         Seller?
+  customer       Customer?
+  serviceCenter  ServiceCenter?
+
+  productHistories ProductHistory[] // <-- thêm dòng này để đối xứng với ProductHistory.user
+}
+
+
+model Manufacturer {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  companyName String
+  address     String?
+  userId      String @unique @db.ObjectId
+  user        User   @relation(fields: [userId], references: [id])
+  companyAvatar String?
+  taxId       String
+  businessLicenseFile String
+  status    Status @default(pending)
+  products    Product[]
+}
+
+model Seller {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  storeName String
+  location  String?
+  userId    String @unique @db.ObjectId
+  user      User   @relation(fields: [userId], references: [id])
+  companyAvatar String?
+  taxId       String   
+  businessLicenseFile String
+  status   Status @default(pending)
+  soldProducts ProductSale[]
+}
+
+model ServiceCenter {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  centerName String
+  location   String?
+  userId     String @unique @db.ObjectId
+  user       User   @relation(fields: [userId], references: [id])
+  companyAvatar String?
+  taxId       String
+  businessLicenseFile String
+  status  Status @default(pending)
+  repairs ProductRepair[]
+}
+
+model Customer {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  fullName  String
+  address   String?
+  userId    String @unique @db.ObjectId
+  user      User   @relation(fields: [userId], references: [id])
+
+  ownedProducts Product[]
+  productSales  ProductSale[]
+}
+
+model Product {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  serialNumber    String   @unique
+  name            String
+  price           Float
+  status          ProductStatus @default(CREATED)
+  manufactureDate DateTime
+  manufacturerId  String  @db.ObjectId
+  currentOwnerId  String? @db.ObjectId
+  productImage   String?
+  manufacturer    Manufacturer @relation(fields: [manufacturerId], references: [id])
+  currentOwner    Customer?    @relation(fields: [currentOwnerId], references: [id])
+  approvalRequests ApprovalRequest[]
+  sales           ProductSale[]
+  repairs         ProductRepair[]
+  histories       ProductHistory[]
+
+  blockchainHash  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ProductSale {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId   String   @db.ObjectId
+  sellerId    String   @db.ObjectId
+  customerId  String   @db.ObjectId
+  saleDate    DateTime @default(now())
+  txHash      String?
+
+  product     Product  @relation(fields: [productId], references: [id])
+  seller      Seller   @relation(fields: [sellerId], references: [id])
+  customer    Customer @relation(fields: [customerId], references: [id])
+  approvalRequests ApprovalRequest[]
+}
+
+model ProductRepair {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId      String   @db.ObjectId
+  serviceCenterId String  @db.ObjectId
+  description    String
+  repairDate     DateTime @default(now())
+  txHash         String?
+
+  product        Product        @relation(fields: [productId], references: [id])
+  serviceCenter  ServiceCenter  @relation(fields: [serviceCenterId], references: [id])
+  approvalRequests ApprovalRequest[]
+}
+
+model ProductHistory {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId    String   @db.ObjectId
+  actionType   HistoryAction
+  description  String?
+  timestamp    DateTime @default(now())
+  performedBy  String   @db.ObjectId
+  txHash       String?
+
+  product      Product  @relation(fields: [productId], references: [id])
+  user         User     @relation(fields: [performedBy], references: [id])
+  approvalRequests ApprovalRequest[]
+}
+
+enum Role {
+  MANUFACTURER
+  SELLER
+  CUSTOMER
+  SERVICE_CENTER
+  ADMIN
+}
+
+enum ProductStatus {
+  CREATED
+  DISTRIBUTED
+  SOLD
+  WARRANTY
+  REPAIRED
+  RETIRED
+}
+
+enum HistoryAction {
+  CREATED
+  DISTRIBUTED
+  SOLD
+  WARRANTY
+  REPAIRED
+  TRANSFER_OWNERSHIP
+}
+
+enum Status {
+  pending
+  approved
+  rejected
+}
+
+model VerifiToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  token     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  token     String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+model ApprovalRequest {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId        String?  @db.ObjectId
+  productSaleId    String?  @db.ObjectId
+  productRepairId  String?  @db.ObjectId
+  productHistoryId String?  @db.ObjectId
+
+  action           ProductStatus  // dùng enum từ Product (CREATED, DISTRIBUTED, SOLD, ...)
+  status           RequestStatus  // OPEN, APPROVED, CANCELED
+  createdAt        DateTime       @default(now())
+  approvedAt       DateTime?
+  description      String?
+  // Relations
+  product          Product?        @relation(fields: [productId], references: [id])
+  productSale      ProductSale?    @relation(fields: [productSaleId], references: [id])
+  productRepair    ProductRepair?  @relation(fields: [productRepairId], references: [id])
+  productHistory   ProductHistory? @relation(fields: [productHistoryId], references: [id])
+}
+enum RequestStatus {
+  OPEN
+  APPROVED
+  CANCELED
+}

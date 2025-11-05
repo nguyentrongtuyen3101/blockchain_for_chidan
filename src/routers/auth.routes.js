@@ -1,0 +1,22 @@
+import { Router } from 'express';
+import passport from 'passport';
+import AuthController from '../modules/auth/auth.controller.js';
+import { authMiddleware } from '../middlewares/auth.middleware.js';
+
+const router = Router();
+
+router.post('/register', AuthController.register);
+router.get('/verify', AuthController.verifyEmail);
+router.post('/login', AuthController.login);
+router.post('/send-reset-password', AuthController.sendMailResetPassword);
+router.get('/redirect-reset-password', AuthController.redirectResetPassword);
+router.patch('/reset-password', AuthController.resetPassword);
+// Login Google
+router.get('/google',passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get(
+  '/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+  (req, res, next) => AuthController.googleCallback(req, res, next)
+);
+router.get('/me',authMiddleware(['CUSTOMER', 'MANUFACTURER', 'SELLER', 'SERVICE_CENTER','ADMIN']), AuthController.me);
+export default router;
